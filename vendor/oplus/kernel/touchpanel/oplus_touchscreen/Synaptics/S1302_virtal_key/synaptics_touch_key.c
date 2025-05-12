@@ -496,6 +496,7 @@ static int synaptics_init_panel(struct synaptics_ts_data *ts)
         return -1;
     }
     /*device control: normal operation, configur = 1*/
+    //chenggang.li @BSP change 0x80 to 0x84, bit2:1 nosleep  bit2:0 sleep
     ret = synaptics_rmi4_i2c_write_byte(ts->client, F01_RMI_CTRL00, 0x80);
     if (ret < 0) {
         msleep(150);
@@ -1552,7 +1553,6 @@ static const struct file_operations oplus_tp_baseline_image_proc_fops =
     .owner = THIS_MODULE,
 };
 
-
 static int synaptics_s1302_proc(void)
 {
     struct proc_dir_entry *proc_entry = 0;
@@ -1568,7 +1568,6 @@ static int synaptics_s1302_proc(void)
     proc_entry = proc_create_data("baseline_test", 0666, procdir, &tp_baseline_test_proc_fops, NULL);
     proc_entry = proc_create_data("oplus_tp_delta_data", 0644, procdir, &oplus_tp_delta_data_proc_fops, NULL);
     proc_entry = proc_create_data("oplus_tp_baseline_image", 0644, procdir, &oplus_tp_baseline_image_proc_fops, NULL);
-
 
     TPD_INFO("create nodes is successe!\n");
 

@@ -3850,4 +3850,4 @@ static void __exit oplus_display_private_api_exit(void)
 module_init(oplus_display_private_api_init);
 module_exit(oplus_display_private_api_exit);
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("Hujie <hujie@oplus.com>");
+MODULE_AUTHOR("Hujie");

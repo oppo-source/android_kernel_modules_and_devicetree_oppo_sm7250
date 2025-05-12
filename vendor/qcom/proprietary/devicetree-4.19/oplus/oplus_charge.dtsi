@@ -605,6 +605,8 @@
 			qcom,lpd-disable;
 			qcom,vooc_enable_charger_first;
 
+			oplus,aging_ffc_version = <1>;
+
 			//for PD9V or QC9V
 			qcom,vbatt_pdqc_to_5v_thr = <4100>;
 			qcom,vbatt_pdqc_to_9v_thr = <4000>;

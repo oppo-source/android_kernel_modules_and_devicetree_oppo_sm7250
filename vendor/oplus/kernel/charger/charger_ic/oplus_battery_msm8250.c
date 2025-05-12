@@ -6151,7 +6151,7 @@ int smblib_set_prop_pd_active(struct smb_charger *chg,
         }
     }
 #endif
-	power_supply_changed(chg->usb_psy);
+
 	return rc;
 }
 
@@ -16711,14 +16711,16 @@ int oplus_chg_set_pd_config()
 {
 	int ret = 0;
 	struct oplus_chg_chip *chip = g_oplus_chip;
-	int cnt_pd_retry = 0;
-	
+	int cnt_pd_retry = 0, charger_volt = 0;
+
 	if (!chip) {
 		return -1;
 	}
 	if(chip->pd_svooc){
 		return 0;
 	}
+	/*** wait 300ms for pd_active = true,then subtype = CHARGER_SUBTYPE_PD ****/
+	msleep(300);
 	mutex_lock(&pd_select_pdo_v);
 #ifdef OPLUS_CUSTOM_OP_DEF
 	if (chip->vbatt_num == 1) {
@@ -16742,12 +16744,15 @@ int oplus_chg_set_pd_config()
 		oplus_chg_config_charger_vsys_threshold(0x02);//set Vsys Skip threshold 104%
 		oplus_chg_enable_burst_mode(false);
 		ret = oplus_pdo_select(9000, 2000);
-		printk(KERN_ERR "%s: vbus[%d], ibus[%d], ret[%d]\n", __func__, 9000, 2000, ret);
-		while ((ret != 0) && (cnt_pd_retry < 5)) {
-			msleep(200);
+		charger_volt = usbtemp_get_charger_voltage_now();
+		printk(KERN_ERR "%s: vbus[%d], ibus[%d], ret[%d], charger_volt=%d\n", __func__, 9000, 2000, ret, charger_volt);
+		while ((charger_volt < 7500) && (cnt_pd_retry < 5)) {
+			msleep(150);
 			ret = oplus_pdo_select(9000, 2000);
+			msleep(50);
+			charger_volt = usbtemp_get_charger_voltage_now();
 			cnt_pd_retry++;
-			printk(KERN_ERR "%s: vbus[%d], ibus[%d], ret[%d], retry_cnt[%d]\n", __func__, 9000, 2000, ret, cnt_pd_retry);
+			printk(KERN_ERR "%s: vbus[%d], ibus[%d], ret[%d], retry_cnt[%d], charger_volt=%d\n", __func__, 9000, 2000, ret, cnt_pd_retry, charger_volt);
 		}
 		msleep(300);
 		oplus_chg_unsuspend_charger();

@@ -225,6 +225,9 @@ int touch_i2c_read_block(struct i2c_client *client, u16 addr, unsigned short len
     }
     if (retry == MAX_I2C_RETRY_TIME) {
         TPD_INFO("%s: I2C read over retry limit\n", __func__);
+	if (ts->tp_is_suspending && ts->tp_is_getting_touch_event && ts->tp_exit_suspend_support) {
+			ts->tp_need_exit_suspend = 1;
+        }
         retval = -EIO;
         if (ts->health_monitor_v2_support) {
 			ts->monitor_data_v2.bus_buf = msg[0].buf;
@@ -563,7 +566,7 @@ int touch_i2c_read(struct i2c_client *client, char *writebuf, int writelen, char
 {
     int retval = 0;
     int retry = 0;
-    struct touchpanel_data *ts = NULL;
+	struct touchpanel_data *ts = NULL;
 
     mutex_lock(&i2c_mutex);
     if (client == NULL) {
@@ -571,8 +574,7 @@ int touch_i2c_read(struct i2c_client *client, char *writebuf, int writelen, char
         mutex_unlock(&i2c_mutex);
         return -1;
     }
-
-    ts = i2c_get_clientdata(client);
+	ts = i2c_get_clientdata(client);
 
     if (readlen > 0) {
         if (writelen > 0) {

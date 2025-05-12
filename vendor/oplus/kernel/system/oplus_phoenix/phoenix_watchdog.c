@@ -23,8 +23,16 @@
 
 #define DELAY_TIME                      30
 #define MAX_CMD_LENGTH                  32
-#define DEFAULT_PHX_WD_PET_TIME         (60 * 4)
 
+/*Timeout increase for low end chipset.
+Resolve boottime delay issue reported in EAP due to mainline update delay
+ALPS07931955
+*/
+#ifdef CONFIG_OPLUS_PHX_WDT_INCREASE
+#define DEFAULT_PHX_WD_PET_TIME         (60 * 6)
+#else
+#define DEFAULT_PHX_WD_PET_TIME         (60 * 4)
+#endif
 static int hang_oplus_main_on = 1;   //default on
 static int phx_boot_mode = 1;
 int hang_oplus_recovery_method = RESTART_AND_RECOVERY;
@@ -94,11 +102,16 @@ __setup("phx_rus_conf.recovery_method=", hang_oplus_recovery_method_init);
 
 static int __init phx_hlos_wd_pet_time_init(char *str)
 {
-    get_option(&str,&phx_hlos_wd_pet_time);
+	get_option(&str, &phx_hlos_wd_pet_time);
 
-    pr_info("phx_hlos_wd_pet_time %d\n", phx_hlos_wd_pet_time);
+#ifdef CONFIG_OPLUS_PHX_WDT_INCREASE
+	if (phx_hlos_wd_pet_time < DEFAULT_PHX_WD_PET_TIME) {
+        	phx_hlos_wd_pet_time = DEFAULT_PHX_WD_PET_TIME;
+	}
+#endif /*CONFIG_OPLUS_PHX_WDT_INCREASE */
 
-    return 1;
+	pr_info("phx_hlos_wd_pet_time %d\n", phx_hlos_wd_pet_time);
+	return 1;
 }
 __setup("phx_rus_conf.kernel_time=", phx_hlos_wd_pet_time_init);
 

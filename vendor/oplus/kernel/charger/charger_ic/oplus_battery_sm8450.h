@@ -266,6 +266,9 @@ enum usb_property_id {
 	USB_TEMP,
 	USB_REAL_TYPE,
 	USB_TYPEC_COMPLIANT,
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	USB_PPS_FORCE_SVOOC,
+#endif /*OPLUS_FEATURE_CHG_BASIC*/
 	USB_PROP_MAX,
 };
 
@@ -493,6 +496,7 @@ struct battery_chg_dev {
 	struct delayed_work ctrl_lcm_frequency;
 /*#endif*/
 	struct delayed_work	oem_lcm_en_check_work;
+	struct delayed_work	apsd_force_svooc_work;
 	u32			oem_misc_ctl_data;
 	bool			oem_usb_online;
 	struct delayed_work	adsp_voocphy_err_work;
@@ -509,6 +513,7 @@ struct battery_chg_dev {
 	struct mutex			chg_en_lock;
 	bool 				chg_en;
 	bool					cid_status;
+	bool					force_svooc;
 
 	struct delayed_work status_keep_clean_work;
 	struct delayed_work status_keep_delay_unlock_work;

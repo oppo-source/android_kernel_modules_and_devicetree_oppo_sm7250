@@ -195,6 +195,7 @@ enum oplus_chg_track_cp_voocphy_break_code {
 	TRACK_CP_VOOCPHY_FULL,
 	TRACK_CP_VOOCPHY_BATT_TEMP_OVER,
 	TRACK_CP_VOOCPHY_USER_EXIT_FASTCHG,
+	TRACK_CP_VOOCPHY_SWITCH_TEMP_RANGE,
 	TRACK_CP_VOOCPHY_OTHER,
 };
 
@@ -237,4 +238,5 @@ int oplus_chg_track_get_mos_err_reason(
 void oplus_chg_track_record_chg_type_info(void);
 void oplus_chg_track_record_ffc_start_info(void);
 void oplus_chg_track_record_ffc_end_info(void);
+void oplus_chg_track_aging_ffc_trigger(bool ffc1_stage);
 #endif

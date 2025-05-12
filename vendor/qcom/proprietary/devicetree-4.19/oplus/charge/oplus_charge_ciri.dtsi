@@ -629,6 +629,8 @@
 			qcom,vbatt_pdqc_to_5v_thr = <4100>;
 			qcom,vbatt_pdqc_to_9v_thr = <4000>;
 
+			oplus,aging_ffc_version = <1>;
+
 			qcom,chargerid_switch-gpio = <&tlmm 4 0x00>;
 			qcom,ship-gpio = <&tlmm 133 0x00>;
 			//qcom,shortc-gpio = <&tlmm 43 0x00>;

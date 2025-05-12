@@ -119,6 +119,10 @@ void __attribute__((weak)) smblib_bypass_vsafe0_control(struct smb_charger *chg,
 /*----For FCC/jeita----------------------------------------*/
 #define FCC_DEFAULT 200000
 
+#define FASTCHG_MODE            0
+#define SILENT_MODE             1
+#define BATTERY_FULL_MODE       2
+
 static int read_range_data_from_node(struct device_node *node,
 		const char *prop_str, struct op_range_data *ranges,
 		int max_threshold, u32 max_value)
@@ -5495,6 +5499,65 @@ static const struct file_operations proc_wireless_quiet_mode_ops = {
 	.owner = THIS_MODULE,
 };
 
+static ssize_t proc_wireless_user_sleep_mode_read(struct file *file, char __user *buf,
+				     size_t count, loff_t *ppos)
+{
+	uint8_t ret = 0;
+	char page[7];
+	int len = 0;
+	struct op_chg_chip *chip = g_op_chip;
+	struct wpc_data *chg_status;
+
+	if (chip == NULL) {
+		chg_err("%s: wlchg driver is not ready\n", __func__);
+		return -ENODEV;
+	}
+
+	chg_status = &chip->wlchg_status;
+	len = sprintf(page, "%d\n",
+		(chg_status->quiet_mode_enabled && chip->quiet_mode_need) ? 1 : 0);
+	ret = simple_read_from_buffer(buf, count, ppos, page, len);
+	return ret;
+}
+
+static ssize_t proc_wireless_user_sleep_mode_write(struct file *file, const char __user *buf,
+				      size_t count, loff_t *lo)
+{
+	char buffer[3] = { 0 };
+	struct op_chg_chip *chip = g_op_chip;
+	int val;
+
+	if (chip == NULL) {
+		chg_err("%s: wlchg driver is not ready\n", __func__);
+		return -ENODEV;
+	}
+
+	if (count > 3) {
+		return -EFAULT;
+	}
+
+	if (copy_from_user(buffer, buf, count)) {
+		chg_err("%s: error.\n", __func__);
+		return -EFAULT;
+	}
+
+	chg_err("buffer=%s", buffer);
+	kstrtoint(buffer, 0, &val);
+	chg_err("val = %d", val);
+	if(val == SILENT_MODE || val == BATTERY_FULL_MODE)
+		chip->quiet_mode_need = true;
+	else
+		chip->quiet_mode_need = false;
+	return count;
+}
+
+static const struct file_operations proc_wireless_user_sleep_mode_ops = {
+	.read = proc_wireless_user_sleep_mode_read,
+	.write = proc_wireless_user_sleep_mode_write,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+};
+
 #ifdef OP_DEBUG
 static ssize_t proc_wireless_epp_read(struct file *file, char __user *buf,
 				      size_t count, loff_t *ppos)
@@ -6182,6 +6245,15 @@ static int init_wireless_charge_proc(struct op_chg_chip *chip)
 		ret = -ENOMEM;
 		chg_err("%s: Couldn't create proc entry, %d\n", __func__,
 			  __LINE__);
+		goto fail;
+	}
+
+	prEntry_tmp = proc_create_data("user_sleep_mode", 0664, prEntry_da,
+					&proc_wireless_user_sleep_mode_ops, chip);
+	if (prEntry_tmp == NULL) {
+		ret = -ENOMEM;
+		chg_err("%s: Couldn't create proc entry, %d\n", __func__,
+				__LINE__);
 		goto fail;
 	}
 

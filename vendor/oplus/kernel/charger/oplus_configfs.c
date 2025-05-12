@@ -24,6 +24,9 @@
 #include "op_wlchg_v2/oplus_chg_wls.h"
 #include "wireless_ic/oplus_nu1619.h"
 #include "voocphy/oplus_voocphy.h"
+#include "oplus_quirks.h"
+
+#define OPLUS_SVOOC_ID_MIN    10
 
 static struct class *oplus_chg_class;
 static struct device *oplus_ac_dir;
@@ -86,6 +89,9 @@ static ssize_t ac_online_show(struct device *dev, struct device_attribute *attr,
 			chip->ac_online = false;
 		}
 	}
+
+	if (chip->ac_online == false && oplus_quirks_keep_connect_status() == 1)
+		chip->ac_online = true;
 
 	if (chip->ac_online) {
 		chg_err("chg_exist:%d, ac_online:%d\n", chip->charger_exist, chip->ac_online);
@@ -1386,6 +1392,12 @@ static ssize_t ppschg_ing_show(struct device *dev, struct device_attribute *attr
 
 	val = oplus_is_pps_charging();
 
+	if (val == 0
+		&& oplus_quirks_keep_connect_status() == 1
+		&& oplus_voocphy_get_fastchg_start() == 0)
+		val = oplus_pps_get_last_charging_status();
+
+	chg_err("val:%d\n", val);
 	return sprintf(buf, "%d\n", val);
 }
 static DEVICE_ATTR_RO(ppschg_ing);
@@ -1403,6 +1415,11 @@ static ssize_t ppschg_power_show(struct device *dev, struct device_attribute *at
 	}
 
 	val = oplus_pps_get_power();
+
+	if (val == OPLUS_PPS_POWER_CLR
+		&& oplus_quirks_keep_connect_status() == 1
+		&& oplus_voocphy_get_fastchg_start() == 0)
+		val = oplus_pps_get_last_power();
 
 	return sprintf(buf, "%d\n", val);
 }
@@ -1460,6 +1477,7 @@ static ssize_t bcc_parms_show(struct device *dev, struct device_attribute *attr,
 	int val = 0;
 	ssize_t len = 0;
 	struct oplus_chg_chip *chip = NULL;
+        int type = oplus_chg_get_fast_chg_type();
 
 	chip = (struct oplus_chg_chip *)dev_get_drvdata(oplus_battery_dir);
 	if (!chip) {
@@ -1467,8 +1485,9 @@ static ssize_t bcc_parms_show(struct device *dev, struct device_attribute *attr,
 		return -EINVAL;
 	}
 
-	if (oplus_vooc_get_reply_bits() == 7 &&
-	    oplus_chg_get_voocphy_support() == NO_VOOCPHY) {
+	if (oplus_vooc_get_reply_bits() == 7
+                && oplus_chg_get_voocphy_support() == NO_VOOCPHY
+                && (type == CHARGER_SUBTYPE_FASTCHG_SVOOC || type >= OPLUS_SVOOC_ID_MIN)) {
 		val = oplus_gauge_get_prev_bcc_parameters(buf);
 	} else {
 		val = oplus_gauge_get_bcc_parameters(buf);
@@ -1645,6 +1664,92 @@ static ssize_t parallel_chg_mos_status_show(struct device *dev, struct device_at
 }
 static DEVICE_ATTR_RO(parallel_chg_mos_status);
 
+static ssize_t aging_ffc_data_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct oplus_chg_chip *chip = NULL;
+	int ffc1_voltage_offset = 0;
+	int ffc2_voltage_offset = 0;
+
+	chip = (struct oplus_chg_chip *)dev_get_drvdata(oplus_battery_dir);
+	if (!chip) {
+		chg_err("chip is NULL\n");
+		return -EINVAL;
+	}
+
+	oplus_chg_get_aging_ffc_offset(chip, &ffc1_voltage_offset, &ffc2_voltage_offset);
+
+	return sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+		chip->aging_ffc_version,
+		chip->vbatt_num,
+		oplus_switching_support_parallel_chg(),
+		chip->debug_batt_cc,
+		chip->batt_cc,
+		chip->limits.default_ffc1_normal_vfloat_sw_limit + ffc1_voltage_offset,
+		chip->limits.default_ffc1_warm_vfloat_sw_limit + ffc1_voltage_offset,
+		chip->limits.default_ffc2_normal_vfloat_sw_limit + ffc2_voltage_offset,
+		chip->limits.default_ffc2_warm_vfloat_sw_limit + ffc2_voltage_offset);
+}
+
+static ssize_t aging_ffc_data_store(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	int val = 0;
+	struct oplus_chg_chip *chip = NULL;
+
+	chip = (struct oplus_chg_chip *)dev_get_drvdata(oplus_battery_dir);
+	if (!chip) {
+		chg_err("chip is NULL\n");
+		return -EINVAL;
+	}
+
+	if (kstrtos32(buf, 0, &val)) {
+		chg_err("buf error\n");
+		return -EINVAL;
+	}
+
+	chip->debug_batt_cc = val;
+
+	return count;
+}
+static DEVICE_ATTR_RW(aging_ffc_data);
+
+static ssize_t bms_heat_temp_compensation_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct oplus_chg_chip *chip = NULL;
+
+	chip = (struct oplus_chg_chip *)dev_get_drvdata(oplus_battery_dir);
+	if (!chip) {
+		chg_err("chip is NULL\n");
+		return -EINVAL;
+	}
+
+	return sprintf(buf, "%d\n", chip->bms_heat_temp_compensation);
+}
+
+static ssize_t bms_heat_temp_compensation_store(struct device *dev, struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	int val = 0;
+	struct oplus_chg_chip *chip = NULL;
+
+	chip = (struct oplus_chg_chip *)dev_get_drvdata(oplus_battery_dir);
+	if (!chip) {
+		chg_err("chip is NULL\n");
+		return -EINVAL;
+	}
+
+	if (kstrtos32(buf, 0, &val)) {
+		chg_err("buf error\n");
+		return -EINVAL;
+	}
+
+	chip->bms_heat_temp_compensation = val;
+
+	return count;
+}
+static DEVICE_ATTR_RW(bms_heat_temp_compensation);
+
 static struct device_attribute *oplus_battery_attributes[] = {
 	&dev_attr_authenticate,
 	&dev_attr_battery_cc,
@@ -1711,6 +1816,8 @@ static struct device_attribute *oplus_battery_attributes[] = {
 	&dev_attr_parallel_chg_mos_status,
 	&dev_attr_design_capacity,
 	&dev_attr_smartchg_soh_support,
+	&dev_attr_aging_ffc_data,
+	&dev_attr_bms_heat_temp_compensation,
 	NULL
 };
 

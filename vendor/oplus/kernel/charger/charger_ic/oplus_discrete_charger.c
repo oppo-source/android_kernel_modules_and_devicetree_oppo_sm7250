@@ -219,6 +219,11 @@ static bool is_ext_mp2650_chg_ops(void)
 	return (strncmp(oplus_chg_ops_name_get(), "ext-mp2650", CHG_OPS_LEN) == 0);
 }
 
+static bool is_ext_sy6970_chg_ops(void)
+{
+	return (strncmp(oplus_chg_ops_name_get(), "ext-sy6970", 64) == 0);
+}
+
 static bool is_ext_sy6974b_chg_ops(void)
 {
 	return (strncmp(oplus_chg_ops_name_get(), "ext-sy6974b", CHG_OPS_LEN) == 0);
@@ -2430,7 +2435,7 @@ int qpnp_get_prop_charger_voltage_now(void)
 
 	if (is_ext_mp2650_chg_ops()) {
 		chg_vol = mp2650_get_vbus_voltage();
-	} else if (is_ext_sy6974b_chg_ops()) {
+	} else if (is_ext_sy6974b_chg_ops() || is_ext_sy6970_chg_ops()) {
 		if (!chip->charger_exist && !chip->ac_online)
 			return 0;
 		if (oplus_chg_get_voocphy_support() == AP_SINGLE_CP_VOOCPHY

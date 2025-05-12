@@ -537,6 +537,8 @@
 			qcom,vbatt_pdqc_to_5v_thr = <4100>;
 			qcom,vbatt_pdqc_to_9v_thr = <4000>;
 
+			oplus,aging_ffc_version = <1>;
+
 			//usbtemp
 			qcom,usbtemp_max_temp_thr = <55>;
 			qcom,usbtemp_temp_up_time_thr = <40>;

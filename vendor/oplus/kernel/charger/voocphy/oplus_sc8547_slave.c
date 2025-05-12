@@ -272,6 +272,39 @@ static int sc8547_slave_set_chg_enable(struct oplus_voocphy_manager *chip, bool 
 	}
 }
 
+static int sc8547_slave_get_adc_enable(struct oplus_voocphy_manager *chip, u8 *data)
+{
+	int ret = 0;
+
+	if (!chip) {
+		pr_err("Failed\n");
+		return -1;
+	}
+
+	ret = sc8547_slave_read_byte(chip->client, SC8547_REG_11, data);
+	if (ret < 0) {
+		pr_err("SC8547_REG_11\n");
+		return -1;
+	}
+
+	*data = *data >> 7;
+
+	return ret;
+}
+
+static int sc8547_slave_set_adc_enable(struct oplus_voocphy_manager *chip, bool enable)
+{
+	if (!chip) {
+		pr_err("Failed\n");
+		return -1;
+	}
+
+	if (enable)
+		return sc8547_slave_write_byte(chip->client, SC8547_REG_11, 0x80);
+	else
+		return sc8547_slave_write_byte(chip->client, SC8547_REG_11, 0x00);
+}
+
 static int sc8547_slave_get_voocphy_enable(struct oplus_voocphy_manager *chip, u8 *data)
 {
 	int ret = 0;
@@ -508,6 +541,8 @@ static struct oplus_voocphy_operations oplus_sc8547_slave_ops = {
 	.set_chg_enable		= sc8547_slave_set_chg_enable,
 	.get_ichg		= sc8547_slave_get_ichg,
 	.reset_voocphy      	= sc8547_slave_reset_voocphy,
+	.get_adc_enable		= sc8547_slave_get_adc_enable,
+	.set_adc_enable		= sc8547_slave_set_adc_enable,
 	.get_cp_status 		= sc8547_slave_get_cp_status,
 	.get_voocphy_enable 	= sc8547_slave_get_voocphy_enable,
 	.dump_voocphy_reg	= sc8547_slave_dump_reg_in_err_issue,

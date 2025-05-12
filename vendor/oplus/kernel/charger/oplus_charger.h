@@ -429,6 +429,12 @@ typedef enum {
 }OPLUS_CHG_STOP_VOTER;
 
 typedef enum {
+	CHG_CYCLE_VOTER__NONE		= 0,
+	CHG_CYCLE_VOTER__ENGINEER	= (1 << 0),
+	CHG_CYCLE_VOTER__USER		= (1 << 1),
+}OPLUS_CHG_CYCLE_VOTER;
+
+typedef enum {
 	CHARGER_STATUS__GOOD,
 	CHARGER_STATUS__VOL_HIGH,
 	CHARGER_STATUS__VOL_LOW,
@@ -778,7 +784,10 @@ struct oplus_chg_limits {
 	int ffc_warm_vfloat_over_sw_limit;
 	int ffc1_normal_vfloat_over_sw_limit;		//4.5V
 	int ffc2_normal_vfloat_over_sw_limit;		//4.5V
-	int ffc2_warm_vfloat_over_sw_limit;
+	int default_ffc1_normal_vfloat_sw_limit;
+	int default_ffc1_warm_vfloat_sw_limit;
+	int default_ffc2_normal_vfloat_sw_limit;
+	int default_ffc2_warm_vfloat_sw_limit;
 	int default_iterm_ma;						/*16~45 default value*/
 	int default_sub_iterm_ma;						/*16~45 default value*/
 	int default_temp_normal_fastchg_current_ma;
@@ -911,6 +920,7 @@ struct oplus_chg_full_data {
 	bool sub_hw_full;
 	int vbat_counts_hw;
 	int sub_vbat_counts_hw;
+	int clear_full_check_count;
 };
 
 struct reserve_soc_data {
@@ -936,6 +946,25 @@ struct reserve_soc_data {
 	int soc_jump_array[RESERVE_SOC_MAX];
 	bool is_soc_jump_range;
 };
+
+typedef enum {
+	AGING_FFC_NOT_SUPPORT,
+	AGING_FFC_V1,
+	AGING_FFC_VERSION_MAX
+} AGING_FFC_VERSION;
+
+#define AGING1_STAGE_CYCLE	500
+#define AGING2_STAGE_CYCLE	1000
+
+#define AGING1_FFC1_SINGLE_OFFSET_MV	10
+#define AGING1_FFC2_SINGLE_OFFSET_MV	10
+#define AGING2_FFC1_SINGLE_OFFSET_MV	15
+#define AGING2_FFC2_SINGLE_OFFSET_MV	15
+
+#define AGING1_FFC1_DOUBLE_OFFSET_MV	15
+#define AGING1_FFC2_DOUBLE_OFFSET_MV	10
+#define AGING2_FFC1_DOUBLE_OFFSET_MV	30
+#define AGING2_FFC2_DOUBLE_OFFSET_MV	20
 
 struct oplus_chg_chip {
 	struct i2c_client *client;
@@ -990,6 +1019,7 @@ struct oplus_chg_chip {
 	bool wireless_support;
 	bool wpc_no_chargerpump;
 	bool charger_exist;
+	bool pre_charger_exist;
 	int charger_type;
 	int charger_subtype;
 	int real_charger_type;
@@ -1069,6 +1099,7 @@ struct oplus_chg_chip {
 	int tbatt_normal_status;
 	int tbatt_cold_status;
 	int prop_status;
+	int keep_prop_status;
 	int stop_voter;
 	int notify_code;
 	int notify_flag;
@@ -1287,6 +1318,8 @@ struct oplus_chg_chip {
 	int debug_force_usbtemp_trigger;
 	int debug_force_fast_gpio_err;
 	int debug_force_cooldown_match_trigger;
+	int debug_batt_cc;
+	int aging_ffc_version;
 	char chg_power_info[OPLUS_CHG_TRACK_CURX_INFO_LEN];
 	char err_reason[OPLUS_CHG_TRACK_DEVICE_ERR_NAME_LEN];
 	bool cool_down_check_done;
@@ -1343,6 +1376,9 @@ struct oplus_chg_chip {
 	bool support_subboard_ntc;
 	bool full_pre_ffc_judge;
 	int full_pre_ffc_mv;
+
+	int bms_heat_temp_compensation;
+	int chg_cycle_status;
 };
 
 
@@ -1463,6 +1499,7 @@ struct oplus_chg_operations {
 	int (*set_bcc_curr_to_voocphy)(int bcc_curr);
 	bool (*is_support_qcpd)(void);
 	int (*get_subboard_temp)(void);
+	int (*get_ccdetect_online)(void);
 };
 
 int __attribute__((weak)) ppm_sys_boost_min_cpu_freq_set(int freq_min, int freq_mid, int freq_max, unsigned int clear_time)
@@ -1702,5 +1739,7 @@ int oplus_chg_get_mmi_value(void);
 int oplus_chg_get_stop_chg(void);
 bool oplus_get_vooc_start_fg(void);
 int oplus_chg_get_fv_when_vooc(struct oplus_chg_chip *chip);
+int oplus_get_ccdetect_online(void);
+void oplus_chg_get_aging_ffc_offset(struct oplus_chg_chip *chip, int *ffc1_offset, int *ffc2_offset);
 //#endif
 #endif /*_OPLUS_CHARGER_H_*/

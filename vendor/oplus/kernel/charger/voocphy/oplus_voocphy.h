@@ -644,6 +644,7 @@ struct oplus_voocphy_manager {
 	bool fastchg_to_warm;
 	bool fastchg_to_warm_full;
 	int fast_chg_type;
+	int last_fast_chg_type;
 	bool fastchg_err_commu;
 	bool fastchg_reactive;
 	bool fastchg_real_allow;
@@ -829,6 +830,8 @@ struct oplus_voocphy_operations {
 	int (*get_voocphy_enable)(struct oplus_voocphy_manager *chip, u8 *data);
 	void (*dump_voocphy_reg)(struct oplus_voocphy_manager *chip);
 	int (*set_dpdm_enable)(struct oplus_voocphy_manager *chip, bool enable);
+	int (*adsp_force_svooc)(bool enable);
+	int (*get_adsp_voocphy_enable)(void);
 };
 
 #define VOOCPHY_LOG_BUF_LEN 1024
@@ -920,4 +923,8 @@ int oplus_voocphy_get_bcc_min_curr(void);
 bool oplus_voocphy_bcc_get_temp_range(void);
 int oplus_voocphy_get_bcc_exit_curr(void);
 int oplus_voocphy_get_batt_curve_current(void);
+void oplus_adsp_voocphy_force_svooc(int enable);
+int oplus_get_adsp_voocphy_enable(void);
+int oplus_voocphy_get_last_fast_chg_type(void);
+void oplus_voocphy_clear_last_fast_chg_type(void);
 #endif /* _OPLUS_VOOCPHY_H_ */

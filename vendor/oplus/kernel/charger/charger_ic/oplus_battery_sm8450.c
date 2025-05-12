@@ -41,6 +41,7 @@
 #include "../op_wlchg_v2/oplus_chg_wls.h"
 #include "../voocphy/oplus_adsp_voocphy.h"
 #include "../oplus_pps.h"
+#include "oplus_quirks.h"
 #include "../voocphy/oplus_voocphy.h"
 #include "../op_wlchg_v2/hal/wls_chg_intf.h"
 #include "../chargepump_ic/oplus_pps_cp.h"
@@ -1455,7 +1456,7 @@ static void oplus_adsp_voocphy_enable_check_func(struct work_struct *work)
 	}
 	chip->first_enabled_adspvoocphy = true;
 	if (chip->mmi_chg == 0 || chip->charger_exist == false
-		|| chip->charger_type != POWER_SUPPLY_TYPE_USB_DCP) {
+		|| chip->charger_type != POWER_SUPPLY_TYPE_USB_DCP || oplus_get_quirks_plug_status(QUIRKS_STOP_ADSP_VOOCPHY)) {
 		/*chg_err("is_mmi_chg no_charger_exist no_dcp_type\n");*/
 		schedule_delayed_work(&bcdev->adsp_voocphy_enable_check_work, round_jiffies_relative(msecs_to_jiffies(5000)));
 		return;
@@ -1879,8 +1880,8 @@ static void battery_chg_update_usb_type_work(struct work_struct *work)
 		}
 		if (pst->prop[USB_ONLINE] == 0) {
 			/*pr_err("lizhijie USB_ONLINE 00000\n");*/
-			if (!(oplus_chg_get_voocphy_support() == ADSP_VOOCPHY &&
-			    g_oplus_chip && g_oplus_chip->mmi_fastchg == 0))
+			if (!((oplus_chg_get_voocphy_support() == ADSP_VOOCPHY &&
+				g_oplus_chip && g_oplus_chip->mmi_fastchg == 0) || oplus_quirks_keep_connect_status()))
 				usb_psy_desc.type = POWER_SUPPLY_TYPE_UNKNOWN;
 		}
 #else
@@ -2533,6 +2534,8 @@ static int usb_psy_get_prop(struct power_supply *psy,
 			pval->intval = 0;
 			chg_err("wls get usb online[%d]\n", pval->intval);
 		}
+		if (oplus_quirks_keep_connect_status())
+			pval->intval = 1;
 		return 0;
 	}
 #endif
@@ -2856,10 +2859,11 @@ static int battery_psy_get_prop(struct power_supply *psy,
 					oplus_vooc_get_fastchg_to_normal() == true ||
 					oplus_vooc_get_fastchg_to_warm() == true ||
 					oplus_vooc_get_fastchg_dummy_started() == true) {
-					if (chip->prop_status != POWER_SUPPLY_STATUS_FULL)
+					if (chip->prop_status != POWER_SUPPLY_STATUS_FULL) {
 						pval->intval = POWER_SUPPLY_STATUS_CHARGING;
-					else
+					} else {
 						pval->intval = chip->prop_status;
+					}
 				} else {
 					pval->intval = chip->prop_status;
 				}
@@ -2868,6 +2872,9 @@ static int battery_psy_get_prop(struct power_supply *psy,
 					chip->tbatt_status == BATTERY_STATUS__LOW_TEMP ||
 					chip->tbatt_status == BATTERY_STATUS__REMOVED)
 					pval->intval = chip->prop_status;
+
+				if (oplus_is_vooc_project() == DUAL_BATT_150W && oplus_quirks_keep_connect_status())
+					pval->intval = chip->keep_prop_status;
 			} else if (!chip->authenticate) {
 				pval->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
 			} else {
@@ -7599,6 +7606,45 @@ int oplus_adsp_voocphy_enable(bool enable)
 	return rc;
 }
 
+static void oplus_adsp_force_svooc_work(struct work_struct *work)
+{
+	int rc = 0;
+	int enable = 0;
+	struct battery_chg_dev *bcdev = NULL;
+	struct psy_state *pst = NULL;
+	struct oplus_chg_chip *chip = g_oplus_chip;
+	if (!chip) {
+		chg_err("chip is NULL!\n");
+		return;
+	}
+	bcdev = chip->pmic_spmi.bcdev_chip;
+	enable = bcdev->force_svooc;
+	pst = &bcdev->psy_list[PSY_TYPE_USB];
+
+	rc = write_property_id(bcdev, pst, USB_PPS_FORCE_SVOOC, enable);
+	if (rc) {
+		chg_err("oplus_adsp_force_svooc fail, rc=%d, enable:%d\n", rc, enable);
+	} else {
+		chg_err("oplus_adsp_force_svooc success, rc=%d, enable:%d\n", rc, enable);
+	}
+
+	return;
+}
+
+int oplus_adsp_force_svooc(bool enable)
+{
+	struct battery_chg_dev *bcdev = NULL;
+	struct oplus_chg_chip *chip = g_oplus_chip;
+	if (!chip) {
+		chg_err("chip is NULL!\n");
+		return -1;
+	}
+	bcdev = chip->pmic_spmi.bcdev_chip;
+	bcdev->force_svooc = enable;
+	schedule_delayed_work(&bcdev->apsd_force_svooc_work, 0);
+	return 0;
+}
+
 static void oplus_chg_status_send_adsp_work(struct work_struct *work)
 {
 	int rc = 0;
@@ -7893,7 +7939,7 @@ static void oplus_plugin_irq_work(struct work_struct *work)
 	}
 	usb_plugin_status = pst->prop[USB_IN_STATUS] & 0xff;
 	chg_err("!!!prop[%d], usb_online[%d]\n", pst->prop[USB_IN_STATUS], bcdev->usb_in_status);
-
+	oplus_quirks_notify_plugin(bcdev->usb_in_status);
 	oplus_chg_track_check_wired_charging_break(usb_plugin_status);
 	bcdev->real_chg_type = POWER_SUPPLY_TYPE_UNKNOWN;
 /*#ifdef OPLUS_FEATURE_CHG_BASIC*/
@@ -7949,6 +7995,7 @@ static void oplus_plugin_irq_work(struct work_struct *work)
 					oplus_chg_wake_update_work();
 				} else if (oplus_vooc_get_fastchg_started() == false) {
 					printk(KERN_ERR "[%s]: plug out fastchg_to_normal/warm/dummy or not vooc\n", __func__);
+					cancel_delayed_work_sync(&chip->update_work);
 					oplus_vooc_reset_fastchg_after_usbout();
 					smbchg_set_chargerid_switch_val(0);
 					chip->chargerid_volt = 0;
@@ -8193,6 +8240,40 @@ int oplus_get_otg_online_status(void)
 	}
 	chip->otg_online = typec_otg;
 
+	return online;
+}
+
+int sm8450_get_ccdetect_online(void)
+{
+	struct battery_chg_dev *bcdev = NULL;
+	struct oplus_chg_chip *chip = g_oplus_chip;
+	int online = 0;
+	int level = 0, otg_scheme;
+
+	if (!chip) {
+		chg_err("chip is NULL!\n");
+		return 0;
+	}
+
+	bcdev = chip->pmic_spmi.bcdev_chip;
+
+	otg_scheme = get_otg_scheme(chip);
+
+
+	if (otg_scheme == OTG_SCHEME_CCDETECT_GPIO) {
+		level = gpio_get_value(bcdev->oplus_custom_gpio.ccdetect_gpio);
+		if (level != gpio_get_value(bcdev->oplus_custom_gpio.ccdetect_gpio)) {
+			printk(KERN_ERR "[OPLUS_CHG][%s]: ccdetect_gpio is unstable, try again...\n", __func__);
+			usleep_range(5000, 5100);
+			level = gpio_get_value(bcdev->oplus_custom_gpio.ccdetect_gpio);
+		}
+		online = (level == 1) ? DISCONNECT : STANDARD_TYPEC_DEV_CONNECT;
+	} else if (otg_scheme == OTG_SCHEME_CID) {
+		online = oplus_get_otg_online_status_with_cid_scheme();
+	} else {
+		online = oplus_get_otg_online_with_switch_scheme();
+	}
+	chg_err("online:%d!\n", online);
 	return online;
 }
 
@@ -9501,6 +9582,7 @@ struct oplus_chg_operations  battery_chg_ops = {
 	//.oplus_chg_wdt_enable = mp2650_wdt_enable,
 	.pdo_5v = oplus_chg_set_pdo_5v,
 	.get_subboard_temp = oplus_get_subboard_temp,
+	.get_ccdetect_online = sm8450_get_ccdetect_online,
 };
 #endif /* OPLUS_FEATURE_CHG_BASIC */
 
@@ -11458,6 +11540,7 @@ static int battery_chg_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(
 		&bcdev->adsp_track_notify_work, adsp_track_notification_handler);
 	INIT_DELAYED_WORK(&bcdev->pd_type_check_work, oplus_pd_type_check_work);
+	INIT_DELAYED_WORK(&bcdev->apsd_force_svooc_work, oplus_adsp_force_svooc_work);
 #endif
 #ifdef OPLUS_FEATURE_CHG_BASIC
 	INIT_DELAYED_WORK(&bcdev->vchg_trig_work, oplus_vchg_trig_work);

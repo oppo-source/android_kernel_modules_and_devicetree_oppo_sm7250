@@ -23,6 +23,8 @@ static struct web_target {
        {"one:gpu_process", {"CrGpuMain"}},
        {"ieyou.train.ark", {"JNISurfaceTextu", "1.ui"}},
        {"v.douyu.android", {"Chrome_IOThread"}},
+       {"com.oplus.vip", {"VizWebView", "Chrome_ChildIOT"}},
+       {"taobao.idlefish", {"JNISurfaceTextu", "1.ui"}},
 };
 
 bool is_top(struct task_struct *p)

@@ -178,6 +178,12 @@ static int entity_over(struct sched_entity *a, struct sched_entity *b)
 	return (s64)(a->vruntime - b->vruntime) > (s64)ux_max_over_thresh * S2NS_T;
 }
 
+noinline int tracing_mark_write(const char *buf)
+{
+	trace_printk(buf);
+	return 0;
+}
+
 extern const struct sched_class fair_sched_class;
 extern const struct sched_class rt_sched_class;
 
@@ -771,6 +777,24 @@ inline int get_ux_state_type(struct task_struct *task)
 	return UX_STATE_NONE;
 }
 
+static void insert_ux_task_into_list(struct rq *rq, struct task_struct *p)
+{
+	struct list_head *pos;
+	bool exist = false;
+
+	list_for_each(pos, &rq->ux_thread_list) {
+		if (pos == &p->ux_entry) {
+			exist = true;
+			BUG_ON(1);
+			break;
+		}
+	}
+	if (!exist) {
+		list_add_tail(&p->ux_entry, &rq->ux_thread_list);
+		get_task_struct(p);
+	}
+}
+
 inline bool test_list_pick_ux(struct task_struct *task)
 {
 #if defined(CONFIG_OPLUS_FEATURE_INPUT_BOOST) && defined(CONFIG_OPLUS_FEATURE_IM)
@@ -783,9 +807,6 @@ inline bool test_list_pick_ux(struct task_struct *task)
 
 void enqueue_ux_thread(struct rq *rq, struct task_struct *p)
 {
-	struct list_head *pos, *n;
-	bool exist = false;
-
 	if (unlikely(!sysctl_sched_assist_enabled))
 		return;
 
@@ -794,18 +815,8 @@ void enqueue_ux_thread(struct rq *rq, struct task_struct *p)
 	}
 
 	p->enqueue_time = rq->clock;
-	if (test_list_pick_ux(p)) {
-		list_for_each_safe(pos, n, &rq->ux_thread_list) {
-			if (pos == &p->ux_entry) {
-				exist = true;
-				break;
-			}
-		}
-		if (!exist) {
-			list_add_tail(&p->ux_entry, &rq->ux_thread_list);
-			get_task_struct(p);
-		}
-	}
+	if (test_list_pick_ux(p))
+		insert_ux_task_into_list(rq, p);
 }
 
 void dequeue_ux_thread(struct rq *rq, struct task_struct *p)
@@ -1696,6 +1707,7 @@ void set_inherit_ux(struct task_struct *task, int type, int depth, int inherit_v
 #endif
 	struct rq *rq = NULL;
 	int old_state = 0;
+	bool list_pick = false;
 
 	if (!task || type >= INHERIT_UX_MAX) {
 		return;
@@ -1721,10 +1733,16 @@ void set_inherit_ux(struct task_struct *task, int type, int depth, int inherit_v
 
 	sched_assist_systrace_pid(task->tgid, task->ux_state, "ux_state %d", task->pid);
 
+	list_pick = test_list_pick_ux(task);
+	if (list_pick && task->on_rq && list_empty(&task->ux_entry)) {
+		insert_ux_task_into_list(rq, task);
+	}
+
 	task_rq_unlock(rq, task, &flags);
 
 	/* requeue runnable task to ensure vruntime adjust */
-	requeue_runnable_task(task);
+	if (!list_pick)
+		requeue_runnable_task(task);
 }
 
 void reset_inherit_ux(struct task_struct *inherit_task, struct task_struct *ux_task, int reset_type)

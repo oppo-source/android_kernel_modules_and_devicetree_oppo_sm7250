@@ -14,6 +14,7 @@
 #include <linux/spi/spidev.h>
 #include <linux/timer.h>
 #include <linux/workqueue.h>
+#include <linux/mutex.h>
 #include "fp_driver.h"
 
 #if defined(CONFIG_FP_SUPPLY_MODE_LDO)
@@ -29,12 +30,15 @@ static int fingerprint_ldo_disable(unsigned int ldo_num, unsigned int mv)
 }
 #endif
 
+static DEFINE_MUTEX(g_power_lock);
+
 static int vreg_setup(struct fp_dev *fp_dev, fp_power_info_t *pwr_info, bool enable) {
     int               rc;
     struct regulator *vreg;
     struct device *   dev  = &fp_dev->pdev->dev;
     const char *      name = NULL;
 
+    mutex_lock(&g_power_lock);
     if (NULL == pwr_info || NULL == pwr_info->vreg_config.name) {
         pr_err("pwr_info is NULL\n");
         rc = -EINVAL;
@@ -92,6 +96,7 @@ static int vreg_setup(struct fp_dev *fp_dev, fp_power_info_t *pwr_info, bool ena
         rc = 0;
     }
 fp_out:
+    mutex_unlock(&g_power_lock);
     return rc;
 }
 

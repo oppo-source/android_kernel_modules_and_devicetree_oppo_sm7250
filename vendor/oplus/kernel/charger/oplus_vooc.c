@@ -265,6 +265,7 @@ static void check_charger_out_work_func(struct work_struct *work)
 		oplus_vooc_reset_temp_range(chip);
 		vooc_xlog_printk(CHG_LOG_CRTI, "charger out, chg_vol:%d\n", chg_vol);
 		oplus_chg_set_icon_debounce_false();
+		oplus_vooc_set_awake(chip, false);
 	}
 }
 
@@ -969,7 +970,7 @@ static void oplus_vooc_recv_errcode(struct oplus_vooc_chip *chip){
 	oplus_chg_set_charger_type_unknown();
 	oplus_vooc_check_charger_out(chip);
 	chip->vops->eint_regist(chip);
-
+	oplus_vooc_set_awake(chip, false);
 }
 
 int oplus_vooc_get_smaller_battemp_cooldown(int ret_batt, int ret_cool){
@@ -1382,6 +1383,7 @@ static void oplus_vooc_fastchg_func(struct work_struct *work)
 			chip->reset_adapter = false;
 			chip->suspend_charger = false;
 			oplus_vooc_clear_bcc_curr_flag();
+			oplus_chg_pps_cp_mode_init(PPS_BYPASS_MODE);
 		} else {
 			chip->allow_reading = false;
 			chip->fastchg_dummy_started = true;
@@ -1901,6 +1903,7 @@ out:
 			chip->fastchg_to_warm = false;
 			chip->fastchg_dummy_started = true;
 		}
+		oplus_chg_unsuspend_charger();
 	}
 	if (data == VOOC_NOTIFY_NORMAL_TEMP_FULL || data == VOOC_NOTIFY_BAD_CONNECTED ||
 		(chip->support_fake_vooc_check && data == VOOC_NOTIFY_DATA_UNKNOWN)) {
@@ -2648,6 +2651,8 @@ bool oplus_vooc_get_btb_temp_over(void)
 extern void oplus_voocphy_reset_fastchg_after_usbout(void);
 void oplus_vooc_reset_fastchg_after_usbout(void)
 {
+	oplus_pps_variables_reset(true);
+
 	if (oplus_chg_get_voocphy_support() == AP_SINGLE_CP_VOOCPHY
 		|| oplus_chg_get_voocphy_support() == AP_DUAL_CP_VOOCPHY) {
 		oplus_voocphy_reset_fastchg_after_usbout();
