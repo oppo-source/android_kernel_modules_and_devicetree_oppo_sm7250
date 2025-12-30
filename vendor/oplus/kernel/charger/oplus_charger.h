@@ -373,6 +373,9 @@ static inline void getnstimeofday(struct timespec *ts)
 
 #define OPLUS_PDQC_5VTO9V	1
 #define OPLUS_PDQC_9VTO5V	2
+#define chg_info(fmt, ...)                                                     \
+	printk(KERN_INFO "[OPLUS_CHG][%s]" fmt, __func__, ##__VA_ARGS__)
+
 #define chg_debug(fmt, ...) \
         printk(KERN_NOTICE "[OPLUS_CHG][%s]"fmt, __func__, ##__VA_ARGS__)
 
@@ -947,6 +950,12 @@ struct reserve_soc_data {
 	bool is_soc_jump_range;
 };
 
+struct dec_cv_data {
+	int dec_vol;
+	int spec_dec_cv_mv;
+};
+#define MAX_DEC_CV_MV 150
+
 typedef enum {
 	AGING_FFC_NOT_SUPPORT,
 	AGING_FFC_V1,
@@ -965,6 +974,20 @@ typedef enum {
 #define AGING1_FFC2_DOUBLE_OFFSET_MV	10
 #define AGING2_FFC1_DOUBLE_OFFSET_MV	30
 #define AGING2_FFC2_DOUBLE_OFFSET_MV	20
+
+#define FCL_TABLE_MAX 2
+#define FCL_CURVE_MAX 3
+struct fcl_table {
+	int volt_diff;
+	int curr_dec;
+	int min_curr;
+} __attribute__((packed));
+
+struct fcl_curves {
+	struct fcl_table limits[FCL_CURVE_MAX];
+	int nums;
+	int index;
+};
 
 struct oplus_chg_chip {
 	struct i2c_client *client;
@@ -1115,6 +1138,7 @@ struct oplus_chg_chip {
 	int led_temp_status;
 	bool vooc_temp_change;
 	int vooc_temp_status;
+	bool full_limit_curr_support;
 	bool camera_on;
 	bool calling_on;
 	bool ac_online;
@@ -1342,6 +1366,7 @@ struct oplus_chg_chip {
 
 	bool pd_disable;
 	bool support_wd0;
+	struct dec_cv_data dec_cv;
 
 	bool support_usbtemp_protect_v2;
 	int usbtemp_curr_status;
@@ -1379,6 +1404,8 @@ struct oplus_chg_chip {
 
 	int bms_heat_temp_compensation;
 	int chg_cycle_status;
+	struct fcl_curves fcl;
+	int fcl_offset;
 };
 
 
@@ -1631,6 +1658,7 @@ int oplus_chg_get_cool_down_status(void);
 int oplus_chg_get_normal_cool_down_status(void);
 void oplus_smart_charge_by_cool_down(struct oplus_chg_chip *chip, int val);
 int oplus_convert_current_to_level(struct oplus_chg_chip *chip, int val);
+int oplus_convert_level_to_current(struct oplus_chg_chip *chip, int val);
 int oplus_convert_pps_current_to_level(struct oplus_chg_chip *chip, int val);
 void oplus_smart_charge_by_shell_temp(struct oplus_chg_chip *chip, int val);
 int oplus_smart_charge_by_bcc(struct oplus_chg_chip *chip, int val);
@@ -1741,5 +1769,7 @@ bool oplus_get_vooc_start_fg(void);
 int oplus_chg_get_fv_when_vooc(struct oplus_chg_chip *chip);
 int oplus_get_ccdetect_online(void);
 void oplus_chg_get_aging_ffc_offset(struct oplus_chg_chip *chip, int *ffc1_offset, int *ffc2_offset);
+bool oplus_chg_get_fcl_curr(int hw_vth, int sw_vth, int vbat, int *curr_dec, int *min_curr, bool *hw);
+int oplus_chg_get_vb_offset(void);
 //#endif
 #endif /*_OPLUS_CHARGER_H_*/

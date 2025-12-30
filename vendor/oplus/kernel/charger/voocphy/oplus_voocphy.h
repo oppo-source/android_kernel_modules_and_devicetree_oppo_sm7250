@@ -796,6 +796,11 @@ struct oplus_voocphy_manager {
 	oplus_chg_track_trigger *cp_err_load_trigger;
 	struct delayed_work cp_err_load_trigger_work;
 	bool high_curr_setting;
+	unsigned int current_full_limit;
+	unsigned int pre_current_full_limit;
+	bool dchg;
+	bool full_limit_curr;
+	unsigned int full_limit_count;
 };
 
 struct oplus_voocphy_operations {
@@ -832,6 +837,7 @@ struct oplus_voocphy_operations {
 	int (*set_dpdm_enable)(struct oplus_voocphy_manager *chip, bool enable);
 	int (*adsp_force_svooc)(bool enable);
 	int (*get_adsp_voocphy_enable)(void);
+	int (*set_sstimeout_ucp_enable)(struct oplus_voocphy_manager *chip, bool enable);
 };
 
 #define VOOCPHY_LOG_BUF_LEN 1024

@@ -208,6 +208,15 @@ struct oplus_chg_track_flag_mapping {
 	enum oplus_chg_track_info_flag ap_flag;
 };
 
+struct oplus_chg_track_full_curr_limit {
+	int one_full_trigger_cnt;
+	int one_full_trigger_volt;
+	int one_full_trigger_curr;
+	int one_full_trigger_temp;
+	int n_full_trigger_cnt;
+	int batt_r;
+};
+
 struct oplus_chg_track_vooc_type {
 	int chg_type;
 	int vol;
@@ -445,6 +454,7 @@ struct oplus_chg_track_status {
 	bool chg_verity;
 	char chg_abnormal_reason[OPLUS_CHG_TRACK_CHG_ABNORMAL_REASON_LENS];
 	int once_chg_cycle_status;
+	struct oplus_chg_track_full_curr_limit fcl;
 };
 
 struct oplus_chg_track {
@@ -1882,9 +1892,56 @@ static int oplus_chg_track_pack_cool_down_stats(
 	return 0;
 }
 
-static void oplus_chg_track_record_charger_info(
-	struct oplus_chg_chip *chip, oplus_chg_track_trigger *p_trigger_data,
-	struct oplus_chg_track_status *track_status)
+int oplus_chg_track_set_fcl_batt_r(int batt_r)
+{
+	struct oplus_chg_track *chip = g_track_chip;
+	struct oplus_chg_track_full_curr_limit *fcl;
+
+	if (!chip)
+		return -EINVAL;
+
+	fcl = &(chip->track_status.fcl);
+	fcl->batt_r = batt_r;
+
+	return 0;
+}
+
+int oplus_chg_track_set_fcl_info(int type, int batt_volt, int batt_curr, int batt_temp)
+{
+	int rc = 0;
+	struct oplus_chg_track *chip = g_track_chip;
+	struct oplus_chg_track_full_curr_limit *fcl;
+
+	if (!chip)
+		return -EINVAL;
+
+	fcl = &(chip->track_status.fcl);
+	switch (type) {
+	case TRACK_1_TIME_FULL_CURR_LIMIT:
+		if (!fcl->one_full_trigger_cnt) {
+			fcl->one_full_trigger_volt = batt_volt;
+			fcl->one_full_trigger_curr = batt_curr;
+			fcl->one_full_trigger_temp = batt_temp;
+		}
+		fcl->one_full_trigger_cnt++;
+		break;
+	case TRACK_N_TIME_FULL_CURR_LIMIT:
+		fcl->n_full_trigger_cnt++;
+		break;
+	default:
+		chg_err("type error\n");
+		rc = -EINVAL;
+		break;
+	}
+
+	chg_err("type:%d, batt_volt:%d, batt_curr:%d, batt_temp:%d, cnt:%d,%d\n",
+		type, batt_volt, batt_curr, batt_temp, fcl->one_full_trigger_cnt, fcl->n_full_trigger_cnt);
+
+	return rc;
+}
+
+static void oplus_chg_track_record_charger_info(struct oplus_chg_chip *chip, oplus_chg_track_trigger *p_trigger_data,
+						struct oplus_chg_track_status *track_status)
 {
 	int index = 0;
 	char cool_down_pack[OPLUS_CHG_TRACK_COOL_DOWN_PACK_LEN] = { 0 };
@@ -2088,6 +2145,13 @@ static void oplus_chg_track_record_charger_info(
 					  "$$aging_ffc_t@@%d",
 					  track_status->aging_ffc1_to_full_time);
 		}
+	}
+	if (index < OPLUS_CHG_TRACK_CURX_INFO_LEN) {
+		index += scnprintf(&(p_trigger_data->crux_info[index]),
+				OPLUS_CHG_TRACK_CURX_INFO_LEN - index, "$$fcl@@%d,%d,%d,%d,%d,%d",
+				track_status->fcl.one_full_trigger_cnt, track_status->fcl.one_full_trigger_volt,
+				track_status->fcl.one_full_trigger_curr, track_status->fcl.one_full_trigger_temp,
+				track_status->fcl.n_full_trigger_cnt, track_status->fcl.batt_r);
 	}
 
 	index += snprintf(&(p_trigger_data->crux_info[index]),
@@ -4847,8 +4911,8 @@ static void oplus_chg_track_reset_chg_abnormal_happened_flag(
 static int
 oplus_chg_track_status_reset(struct oplus_chg_track_status *track_status)
 {
-	memset(&(track_status->power_info), 0,
-	       sizeof(track_status->power_info));
+	memset(&(track_status->fcl), 0, sizeof(track_status->fcl));
+	memset(&(track_status->power_info), 0, sizeof(track_status->power_info));
 	strcpy(track_status->power_info.power_mode, "unknow");
 	track_status->chg_no_charging_cnt = 0;
 	track_status->ledon_ave_speed = 0;

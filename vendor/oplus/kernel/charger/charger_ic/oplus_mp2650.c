@@ -2411,7 +2411,10 @@ int mp2650_hardware_init(void)
 
 	mp2650_set_chging_term_disable();
 
-	mp2650_input_current_limit_init();
+	if (!chip->support_icl_optimization ||
+	   (chip->support_icl_optimization &&
+	    oplus_chg_get_boot_completed() == true))
+		mp2650_input_current_limit_init();
 
 	mp2650_float_voltage_write(WPC_TERMINATION_VOLTAGE);
 
@@ -2455,7 +2458,10 @@ int mp2650_hardware_init(void)
 
 	mp2650_set_wdt_timer(REG09_MP2650_WTD_TIMER_40S);
 
-	mp2650_input_current_limit_without_aicl(500);
+	if (!chip->support_icl_optimization ||
+	   (chip->support_icl_optimization &&
+	    oplus_chg_get_boot_completed() == true))
+		mp2650_input_current_limit_without_aicl(500);
 
 	return true;
 }
@@ -2962,6 +2968,16 @@ static void init_mp2650_read_log(void)
 }
 #endif /*DEBUG_BY_FILE_OPS*/
 
+static int mp2650_parse_dt(struct chip_mp2650 *chip)
+{
+	struct device_node *node = chip->dev->of_node;
+
+	chip->support_icl_optimization = of_property_read_bool(node, "support_icl_optimization");
+	chg_err("support_icl_optimization=%d", chip->support_icl_optimization);
+
+	return 0;
+}
+
 static int mp2650_driver_probe(struct i2c_client *client, const struct i2c_device_id *id) 
 {
 	int ret = 0;
@@ -2983,6 +2999,7 @@ static int mp2650_driver_probe(struct i2c_client *client, const struct i2c_devic
 	mp2650_dump_registers();
 	mp2650_vbus_avoid_electric_config();
 	chg_ic->probe_flag = true;
+	mp2650_parse_dt(chg_ic);
 	mp2650_hardware_init();
 	mp2650_gpio_init(chg_ic);
 

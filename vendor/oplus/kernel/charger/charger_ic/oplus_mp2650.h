@@ -618,20 +618,21 @@ enum {
 };
 
 struct chip_mp2650 {
-        struct i2c_client	*client;
-        struct device		*dev;
-        int			hw_aicl_point;
-        int			sw_aicl_point;
-        int			pre_current_ma;
+	struct i2c_client *client;
+	struct device *dev;
+	int hw_aicl_point;
+	int sw_aicl_point;
+	int pre_current_ma;
 
-        struct pinctrl		*pinctrl;
+	struct pinctrl *pinctrl;
 
-        int			mps_otg_en_gpio;
-        struct pinctrl_state    *mps_otg_en_active;
-        struct pinctrl_state    *mps_otg_en_sleep;
-        struct pinctrl_state    *mps_otg_en_default;
-	atomic_t		charger_suspended;
-        bool                    probe_flag;
+	int mps_otg_en_gpio;
+	struct pinctrl_state *mps_otg_en_active;
+	struct pinctrl_state *mps_otg_en_sleep;
+	struct pinctrl_state *mps_otg_en_default;
+	atomic_t charger_suspended;
+	bool probe_flag;
+	bool support_icl_optimization;
 };
 
 struct oplus_chg_operations *  oplus_get_chg_ops(void);
